@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏭 Kho Sản Xuất Trại Giam Đồng Sơn — Dashboard Quản Lý</title>
+    <meta name="description"
+        content="Dashboard theo dõi kho nguyên liệu, sản xuất, xuất bán và tồn kho thành phẩm — Trại Giam Đồng Sơn.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <link rel="stylesheet" href="style.css?v=2">
+</head>
+
+<body>
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+    <div class="orb orb3"></div>
+
+    <!-- ========== HEADER ========== -->
+    <header class="app-header">
+        <div class="header-left">
+            <div class="logo-wrap"><i class="fa-solid fa-industry"></i></div>
+            <div>
+                <h1 class="app-title">🏭 Kho Sản Xuất Trại Giam Đồng Sơn</h1>
+                <p class="app-subtitle">Theo dõi: Nguyên liệu → Sản xuất → Xuất bán → Tồn kho thành phẩm</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="badge-date">
+                <i class="fa-regular fa-calendar"></i>
+                <span id="currentDate">--/--/----</span>
+            </div>
+            <div class="badge-countdown">
+                <i class="fa-solid fa-rotate"></i>
+                <span id="countdown">--:--</span>
+            </div>
+            <button class="btn-refresh" id="btnRefresh" onclick="initDashboard(); startAutoRefresh()">
+                <i class="fa-solid fa-rotate-right"></i> Làm mới
+            </button>
+            <button class="btn-settings" onclick="requirePin()" id="btnSettings" title="Cài đặt (Yêu cầu mật khẩu)">
+                <i class="fa-solid fa-lock"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- ========== SETTINGS PANEL ========== --> <!-- ========== PASSWORD MODAL ========== -->
+    <div class="pin-overlay" id="pinOverlay" onclick="closePinModal()">
+        <div class="pin-modal" onclick="event.stopPropagation()">
+            <div class="pin-modal-icon">
+                <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <h3>Xác Thực Quản Trị</h3>
+            <p>Nhập mật khẩu để vào phần cài đặt nguồn dữ liệu</p>
+            <div class="pw-input-wrap">
+                <i class="fa-solid fa-key pw-icon"></i>
+                <input type="password" id="pwInput" class="pw-input" placeholder="Nhập mật khẩu..."
+                    onkeydown="if(event.key==='Enter') checkPin()" autocomplete="off">
+                <button class="pw-eye" onclick="togglePwEye()" tabindex="-1">
+                    <i class="fa-solid fa-eye" id="pwEyeIcon"></i>
+                </button>
+            </div>
+            <div class="pin-error" id="pinError"></div>
+            <button class="btn-pin-confirm" onclick="checkPin()">
+                <i class="fa-solid fa-unlock"></i> Xác nhận
+            </button>
+            <button class="btn-pin-cancel" onclick="closePinModal()">Hủy</button>
+        </div>
+    </div>
+
+    <div class="settings-overlay" id="settingsOverlay" onclick="toggleSettingsPanel()"></div>
+    <aside class="settings-panel" id="settingsPanel">
+        <div class="settings-header">
+            <h3><i class="fa-solid fa-link"></i> Cấu Hình 5 Nguồn Dữ Liệu</h3>
+            <button onclick="toggleSettingsPanel()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="settings-body">
+            <p class="settings-desc">
+                Dán link <strong>Xuất bản lên web (.csv)</strong> cho từng sheet.<br>
+                <span style="color:#7dd3fc;font-size:0.72rem">Vào Tệp → Chia sẻ → Xuất bản lên web → chọn sheet → .csv →
+                    Xuất bản → Copy link</span>
+            </p>
+            <div class="field-group">
+                <label><i class="fa-solid fa-seedling" style="color:#f59e0b"></i> Sheet 1: <strong>Kho đầu
+                        vào</strong></label>
+                <input type="text" id="url_s1" placeholder="Link CSV sheet 'Kho đầu vào'...">
+            </div>
+            <div class="field-group">
+                <label><i class="fa-solid fa-gears" style="color:#10b981"></i> Sheet 2: <strong>Nhật Ký Sản
+                        Xuất</strong></label>
+                <input type="text" id="url_s2" placeholder="Link CSV sheet 'Nhật Ký Sản Xuất'...">
+            </div>
+            <div class="field-group">
+                <label><i class="fa-solid fa-truck" style="color:#3b82f6"></i> Sheet 3: <strong>Nhật Ký Xuất
+                        Bán</strong></label>
+                <input type="text" id="url_s3" placeholder="Link CSV sheet 'Nhật Ký Xuất Bán'...">
+            </div>
+            <div class="field-group">
+                <label><i class="fa-solid fa-warehouse" style="color:#8b5cf6"></i> Sheet 4: <strong>Tồn Kho Thành
+                        Phẩm</strong></label>
+                <input type="text" id="url_s4" placeholder="Link CSV sheet 'Tồn Kho Thành Phẩm'...">
+            </div>
+            <div class="field-group">
+                <label><i class="fa-solid fa-chart-bar" style="color:#ec4899"></i> Sheet 5: <strong>Năng Suất Các
+                        Đội</strong></label>
+                <input type="text" id="url_s5" placeholder="Link CSV sheet 'Năng Suất Các Đội'...">
+            </div>
+            <details class="howto">
+                <summary>📋 Hướng dẫn lấy link (Bấm để xem)</summary>
+                <ol>
+                    <li>Mở: <code
+                            style="font-size:0.68rem;color:#7dd3fc;word-break:break-all">https://docs.google.com/spreadsheets/d/1DD6ZBi_TJcNU_7j5zt3vd-CxnPczx7cqp3100VgzmGM</code>
+                    </li>
+                    <li>Bấm tab sheet cần lấy ở thanh dưới cùng</li>
+                    <li><b>Tệp → Chia sẻ → Xuất bản lên web</b></li>
+                    <li>Chọn đúng tên sheet + định dạng <b>.csv</b></li>
+                    <li>Bấm <b>Xuất bản</b> → Copy link → dán vào ô tương ứng</li>
+                    <li>Lặp lại 5 lần cho 5 sheet</li>
+                </ol>
+            </details>
+        </div>
+        <div class="settings-footer" style="display: flex; gap: 0.5rem">
+            <button class="btn btn-primary" onclick="saveSettings()">
+                <i class="fa-solid fa-floppy-disk"></i> Lưu & Tải Lại
+            </button>
+            <button class="btn btn-danger"
+                style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); color: #fca5a5;"
+                onclick="clearCacheAndReload()">
+                <i class="fa-solid fa-trash-can"></i> Xóa Cache & Dùng Link Gốc
+            </button>
+            <button class="btn-save" onclick="generateShareLink()"
+                style="background: linear-gradient(135deg, #10b981, #059669); flex:1">
+                <i class="fa-solid fa-share-nodes"></i> Chia sẻ Cấu hình
+            </button>
+        </div>
+    </aside>
+
+    <!-- ========== MAIN ========== -->
+    <main class="dashboard">
+
+        <div class="status-bar" id="statusBar">
+            <i class="fa-solid fa-circle-info"></i>
+            <span id="statusMsg">Đang tải dữ liệu...</span>
+        </div>
+
+        <!-- KPI ROW -->
+        <section class="kpi-row">
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)">
+                    <i class="fa-solid fa-seedling"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Tổng Nhập Nguyên Liệu</span>
+                    <div class="kpi-value" id="kv1">--</div>
+                    <div class="kpi-unit">Kg · Kho đầu vào</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:linear-gradient(135deg,#10b981,#059669)">
+                    <i class="fa-solid fa-gears"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Tổng Sản Xuất (Nhập TP)</span>
+                    <div class="kpi-value" id="kv2">--</div>
+                    <div class="kpi-unit">Kg · Nhật Ký SX</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:linear-gradient(135deg,#3b82f6,#2563eb)">
+                    <i class="fa-solid fa-truck"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Tổng Xuất Bán</span>
+                    <div class="kpi-value" id="kv3">--</div>
+                    <div class="kpi-unit">Kg · Nhật Ký Xuất Bán</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed)">
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Tổng Tồn Kho Thành Phẩm</span>
+                    <div class="kpi-value" id="kv4">--</div>
+                    <div class="kpi-unit">Kg · Tồn Kho TP</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:linear-gradient(135deg,#ef4444,#dc2626)">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Tồn Nguyên Liệu Hiện Tại</span>
+                    <div class="kpi-value" id="kv5">--</div>
+                    <div class="kpi-unit">Kg · ngày gần nhất</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CHARTS GRID -->
+        <section class="charts-grid">
+
+            <!-- Chart 1: Kho đầu vào Nhập/Xuất/Tồn -->
+            <div class="chart-card wide">
+                <div class="chart-card-header">
+                    <div class="chart-title-wrap">
+                        <div class="chart-icon" style="background:rgba(245,158,11,0.15);color:#f59e0b"><i
+                                class="fa-solid fa-seedling"></i></div>
+                        <div>
+                            <h2>📦 Nhập nguyên liệu / Xuất thành phẩm / Tồn thành phẩm</h2>
+                            <p>So sánh tổng quan: Nguyên liệu nhập kho / Thành phẩm xuất bán / Tồn thành phẩm</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-area chart-area-xl"><canvas id="chart1"></canvas></div>
+            </div>
+
+            <!-- Chart 2: Nhật Ký SX - Nhập TP theo ngày (Bar stacked) -->
+            <div class="chart-card">
+                <div class="chart-card-header">
+                    <div class="chart-title-wrap">
+                        <div class="chart-icon" style="background:rgba(16,185,129,0.15);color:#10b981"><i
+                                class="fa-solid fa-gears"></i></div>
+                        <div>
+                            <h2>🏭 Sản Lượng Sản Xuất Theo Đội</h2>
+                            <p>Tổng nhập thành phẩm của từng đội (Năng Suất Các Đội)</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-area"><canvas id="chart2"></canvas></div>
+            </div>
+
+            <!-- Chart 3: Nhật Ký Xuất Bán theo ngày -->
+            <div class="chart-card">
+                <div class="chart-card-header">
+                    <div class="chart-title-wrap">
+                        <div class="chart-icon" style="background:rgba(59,130,246,0.15);color:#3b82f6"><i
+                                class="fa-solid fa-truck"></i></div>
+                        <div>
+                            <h2>🚛 Nhật Ký Xuất Bán Theo Ngày</h2>
+                            <p>Tổng khối lượng xuất bán hàng ngày cho khách hàng</p>
+                        </div>
+                    </div>
+                    <div class="chart-tabs">
+                        <button class="tab active" onclick="switchTab3(this,'7')">7 ngày</button>
+                        <button class="tab" onclick="switchTab3(this,'all')">Tất cả</button>
+                    </div>
+                </div>
+                <div class="chart-area"><canvas id="chart3"></canvas></div>
+            </div>
+
+            <!-- Chart 4: Tồn kho thành phẩm (Donut) -->
+            <div class="chart-card">
+                <div class="chart-card-header">
+                    <div class="chart-title-wrap">
+                        <div class="chart-icon" style="background:rgba(139,92,246,0.15);color:#8b5cf6"><i
+                                class="fa-solid fa-chart-pie"></i></div>
+                        <div>
+                            <h2>🥧 Cơ Cấu Tồn Kho Thành Phẩm</h2>
+                            <p>Tỷ trọng từng loại (A+, A, B, C, Phá, Tiểu...)</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-area donut-area"><canvas id="chart4"></canvas></div>
+            </div>
+
+            <!-- Chart 5: So sánh Nhập SX vs Xuất Bán theo ngày -->
+            <div class="chart-card wide" id="card5">
+                <div class="chart-card-header">
+                    <div class="chart-title-wrap">
+                        <div class="chart-icon" style="background:rgba(236,72,153,0.15);color:#ec4899"><i
+                                class="fa-solid fa-scale-balanced"></i></div>
+                        <div>
+                            <h2>⚖️ Cân Đối Sản Xuất vs Xuất Bán</h2>
+                            <p>So sánh nhập thành phẩm (SX) với xuất bán — nhìn thấy chênh lệch tồn kho</p>
+                        </div>
+                    </div>
+                    <div class="chart-tabs">
+                        <button class="tab active" onclick="switchTab5(this,'7')">7 ngày</button>
+                        <button class="tab" onclick="switchTab5(this,'14')">14 ngày</button>
+                        <button class="tab" onclick="switchTab5(this,'all')">Tất cả</button>
+                    </div>
+                </div>
+                <div class="chart-area"><canvas id="chart5"></canvas></div>
+            </div>
+
+            <!-- Chart 6: Xếp hạng đội theo tổng KL -->
+            <div class="chart-card wide">
+                <div class="chart-card-header">
+                    <div class="chart-title-wrap">
+                        <div class="chart-icon" style="background:rgba(248,113,113,0.15);color:#f87171"><i
+                                class="fa-solid fa-ranking-star"></i></div>
+                        <div>
+                            <h2>🏆 Xếp Hạng Hiệu Suất Từng Đội</h2>
+                            <p>So sánh tổng xuất & nhập thành phẩm giữa các đội (Năng Suất Các Đội)</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-area"><canvas id="chart6"></canvas></div>
+            </div>
+
+            <!-- Chart 7: Hao Hụt Nguyên Liệu Theo Đội -->
+            <div class="chart-card wide">
+                <div class="chart-card-header">
+                    <div class="chart-title-wrap">
+                        <div class="chart-icon" style="background:rgba(239, 68, 68, 0.15);color:#ef4444"><i
+                                class="fa-solid fa-arrow-trend-down"></i></div>
+                        <div>
+                            <h2>📉 Hao Hụt Nguyên Liệu Theo Đội</h2>
+                            <p>Tổng hao hụt & Tỷ lệ hao hụt (%) (Báo cáo từ Kho Đầu Vào)</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-area chart-area-xl"><canvas id="chart7"></canvas></div>
+            </div>
+
+        </section>
+
+        <!-- TABLE: Tồn kho thành phẩm -->
+        <section class="table-section">
+            <div class="table-header">
+                <h2><i class="fa-solid fa-boxes-stacked" style="color:#8b5cf6"></i> Bảng Tồn Kho Thành Phẩm Chi Tiết
+                </h2>
+                <span class="table-badge" id="tableDate">Tồn Kho Hiện Tại</span>
+            </div>
+            <div class="table-wrap">
+                <table id="detailTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Loại Thành Phẩm</th>
+                            <th>Tổng Nhập Kho (Kg/Tấn)</th>
+                            <th>Tổng Xuất Bán (Kg/Tấn)</th>
+                            <th>Tồn Kho Thực Tế (Kg/Tấn)</th>
+                            <th>Tỷ Lệ / Tổng Tồn</th>
+                            <th>Trạng Thái</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr>
+                            <td colspan="7" style="text-align:center;color:var(--muted)">Đang tải...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- LOADING -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <div class="spinner-ring"></div>
+            <p>Đang kết nối Kho Sản Xuất Trại Giam Đồng Sơn...</p>
+        </div>
+    </div>
+
+    <script src="script.js?v=6"></script>
+</body>
+
+</html>
