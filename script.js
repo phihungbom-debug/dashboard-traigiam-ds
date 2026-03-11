@@ -873,15 +873,13 @@ function switchTab3(btn, days) {
 // ===== Chart 4: Tồn Kho TP (Donut — chỉ hàng có tồn > 0) =====
 function renderChart4() {
     const d = DATA.s4 || [];
+    // CHỈ lấy hàng có tồn > 0 từ sheet Tồn Kho Thành Phẩm
     const hasTon = d.filter(r => r.ton > 0);
-    if (!hasTon.length) {
-        // Nếu không có tồn kho dương, hiển thị tất cả nhập
-        const hasNhap = d.filter(r => r.nhap > 0);
-        if (!hasNhap.length) return;
-    }
-    const sorted = [...(hasTon.length ? hasTon : d.filter(r => r.nhap > 0))].sort((a, b) => b.ton - a.ton);
+    if (!hasTon.length) return;
+    
+    const sorted = [...hasTon].sort((a, b) => b.ton - a.ton);
     const labels = sorted.map(r => r.ten);
-    const vals = sorted.map(r => Math.abs(r.ton));
+    const vals = sorted.map(r => r.ton);
     const pal = ['#8b5cf6', '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#a855f7', '#14b8a6', '#6366f1'];
 
     destroyChart('c4');
@@ -991,11 +989,14 @@ function renderTable() {
         tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Chưa có dữ liệu tồn kho</td></tr>';
         return;
     }
-    const sorted = [...d].sort((a, b) => b.nhap - a.nhap);
-    const totalNhap = sorted.reduce((s, r) => s + r.nhap, 0);
+    // Sắp xếp theo Tồn kho thực tế
+    const sorted = [...d].sort((a, b) => b.ton - a.ton);
+    // Tính tổng tồn cho các mặt hàng > 0 để tính tỷ lệ %
+    const totalTon = sorted.reduce((s, r) => s + (r.ton > 0 ? r.ton : 0), 0);
 
     tbody.innerHTML = sorted.map((r, i) => {
-        const pct = totalNhap > 0 ? ((r.nhap / totalNhap) * 100).toFixed(1) : 0;
+        // Tính tỷ lệ % dựa trên số Tồn kho thay vì Nhập kho
+        const pct = (totalTon > 0 && r.ton > 0) ? ((r.ton / totalTon) * 100).toFixed(1) : 0;
         const badge = r.ton > 200
             ? '<span class="badge-status badge-ok"><i class="fa-solid fa-check"></i> Đủ hàng</span>'
             : r.ton > 0
