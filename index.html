@@ -220,7 +220,7 @@
                 <div class="chart-area chart-area-xl"><canvas id="chart1"></canvas></div>
             </div>
 
-            <!-- Chart 2: Nhật Ký SX - Nhập TP theo ngày (Bar stacked) -->
+            <!-- Chart 2: Sản Lượng Sản Xuất Theo Đội -->
             <div class="chart-card">
                 <div class="chart-card-header">
                     <div class="chart-title-wrap">
@@ -230,6 +230,9 @@
                             <h2>🏭 Sản Lượng Sản Xuất Theo Đội</h2>
                             <p>Tổng nhập thành phẩm của từng đội (Năng Suất Các Đội)</p>
                         </div>
+                    </div>
+                    <div class="chart-tabs" id="loTabs2">
+                        <!-- các nút lọc Lô sẽ được điền tự động -->
                     </div>
                 </div>
                 <div class="chart-area"><canvas id="chart2"></canvas></div>
@@ -334,8 +337,8 @@
                         <tr>
                             <th>#</th>
                             <th>Loại Thành Phẩm</th>
-                            <th>Tổng Nhập Kho (Kg/Tấn)</th>
-                            <th>Tổng Xuất Bán (Kg/Tấn)</th>
+                            <th>Tổng Xuất Làm (Kg/Tấn)</th>
+                            <th>Tổng Nhập TP (Kg/Tấn)</th>
                             <th>Tồn Kho Thực Tế (Kg/Tấn)</th>
                             <th>Tỷ Lệ / Tổng Tồn</th>
                             <th>Trạng Thái</th>
@@ -360,7 +363,7 @@
         </div>
     </div>
 
-    <script src="script.js?v=7"></script>
+    <script src="script.js?v=8"></script>
 </body>
 
 </html>

@@ -623,27 +623,34 @@ function parseXuatBan(rows) {
 
 /**
  * Sheet 4: Tồn Kho Thành Phẩm
- * A=Tên Thành Phẩm | B=Tổng Nhập Kho | C=Tổng Xuất Bán | D=🔥 TÒN KHO THỰC TẾ
+ * A=Tên Thành Phẩm | B=Tổng Xuất Làm | C=Tổng Nhập Thành Phẩm | D=🔥 TỒN KHO THỰC TẾ | E=Tồn Nguyên Liệu
+ * Lưu ý: B và C đảo so với tên cũ — phải lấy đúng theo header thực tế
  */
 function parseTonKho(rows) {
-    if (!rows || rows.length < 2) return DEMO.s4_tonKho;
+    if (!rows || rows.length < 2) return { items: DEMO.s4_tonKho, tonRaw: 0 };
     const h = rows[0].map(c => String(c || ''));
     const hn = h.map(c => norm(c));
 
-    // Tìm từng cột
-    const iNhap = hn.findIndex(c => c.includes('nhap'));
-    const iXuat = hn.findIndex(c => c.includes('xuat'));
-    // Tồn: tìm 'ton' hoặc emoji 🔥
-    let iTon = hn.findIndex(c => c.includes('ton') || c.includes('thuc'));
-    if (iTon < 0) iTon = h.findIndex(c => c.includes('🔥'));
+    // Cột B: "Tổng Xuất Làm" → xuat (index 1)
+    // Cột C: "Tổng Nhập Thành Phẩm" → nhap (index 2)
+    // Cột D: "🔥 TỒN KHO THỰC TẾ" → ton (index 3)
+    // Cột E: "Tồn Nguyên Liệu Hiện Tại" → tonRaw (index 4)
 
-    const nIdx = iNhap >= 0 ? iNhap : 1;
-    const xIdx = iXuat >= 0 ? iXuat : 2;
-    const tIdx = iTon >= 0 ? iTon : 3;
+    // Tìm index linh hoạt theo header
+    const iXuat = hn.findIndex(c => c.includes('xuat') || c.includes('xuat lam'));
+    const iNhap = hn.findIndex(c => c.includes('nhap'));
+    // Tồn: ưu tiên 'ton kho' hoặc emoji 🔥
+    let iTon = hn.findIndex(c => (c.includes('ton') && c.includes('kho')) || c.includes('thuc te') || c.includes('thuc t'));
+    if (iTon < 0) iTon = h.findIndex(c => c.includes('🔥'));
+    if (iTon < 0) iTon = hn.findIndex(c => c.includes('ton') && !c.includes('nguyen'));
+
+    const xIdx = iXuat >= 0 ? iXuat : 1;   // B
+    const nIdx = iNhap >= 0 ? iNhap : 2;   // C
+    const tIdx = iTon  >= 0 ? iTon  : 3;   // D
 
     const result = [];
     let tonRaw = 0;
-    // Lấy tồn nguyên liệu thô từ cột E (index 4), thường ở ô E2 (dòng dữ liệu đầu tiên)
+    // Lấy Tồn Nguyên Liệu Hiện Tại từ cột E (index 4)
     if (rows.length > 1) {
         tonRaw = pn(rows[1][4]);
     }
@@ -652,38 +659,49 @@ function parseTonKho(rows) {
         const r = rows[i];
         const ten = String(r[0] || '').trim();
         if (!ten) continue;
-        const nhap = pn(r[nIdx]);
-        const xuat = pn(r[xIdx]);
-        const ton = pn(r[tIdx]);
+        const nhap = pn(r[nIdx]);   // Tổng Nhập Thành Phẩm (C)
+        const xuat = pn(r[xIdx]);   // Tổng Xuất Làm (B)
+        const ton  = pn(r[tIdx]);   // Tồn Kho Thực Tế (D)
         result.push({ ten, nhap, xuat, ton });
     }
     return { items: (result.length > 0 ? result : DEMO.s4_tonKho), tonRaw };
 }
 
 /**
- * Sheet 5: Năng Suất Các Đội (Đặc thù cột Tháng, Đội, Nhập, Xuất)
+ * Sheet 5: Năng Suất Các Đội
+ * A=Tháng | B=Lô | C=Đội | D=Xuất làm | E=Nhập thành phẩm | F=Phạm dầu
  */
 function parseNangSuatCacDoi(rows) {
     if (!rows || rows.length < 2) return [];
     const h = rows[0].map(c => norm(c));
-    // Tìm linh hoạt hơn: "đội", "đội trưởng", "tên đội"
-    const iDoi = h.findIndex(c => c.includes('doi') || c.includes('ten'));
+
+    // Tìm đúng cột theo tên header thực tế
+    const iLo  = h.findIndex(c => c.includes('lo'));
+    const iDoi = h.findIndex(c => c.includes('doi'));
     const iXuat = h.findIndex(c => c.includes('xuat'));
     const iNhap = h.findIndex(c => c.includes('nhap'));
 
-    if (iDoi < 0) return [];
+    // Fallback index theo thứ tự thực tế: A=0 Tháng, B=1 Lô, C=2 Đội, D=3 Xuất, E=4 Nhập
+    const loIdx  = iLo   >= 0 ? iLo   : 1;
+    const doiIdx = iDoi  >= 0 ? iDoi  : 2;
+    const xIdx   = iXuat >= 0 ? iXuat : 3;
+    const nIdx   = iNhap >= 0 ? iNhap : 4;
+
+    if (doiIdx < 0) return [];
 
     const result = [];
     for (let i = 1; i < rows.length; i++) {
         const r = rows[i];
         const month = String(r[0] || '').trim();
         if (!month || month.startsWith('<!')) continue;
-        const doi = str(r[iDoi]) || "N/A";
-        const tN = pn(r[iNhap]);
-        const tX = pn(r[iXuat]);
+        const lo  = str(r[loIdx]) || 'N/A';
+        const doi = str(r[doiIdx]) || 'N/A';
+        const tN  = pn(r[nIdx]);   // Nhập thành phẩm (E)
+        const tX  = pn(r[xIdx]);   // Xuất làm (D)
         if (tN === 0 && tX === 0) continue;
         result.push({
             ngay: month,
+            lo,
             doi,
             tongNhapTP: tN,
             tongXuatTP: tX,
@@ -810,17 +828,35 @@ function renderChart1() {
     });
 }
 
-// ===== Chart 2: Sản lượng từng Đội (grouped bar) =====
-function renderChart2() {
-    const src = ((DATA.s5 && DATA.s5.length) ? DATA.s5 : DATA.s2) || [];
+// ===== Chart 2: Sản lượng từng Đội (grouped bar) — có bộ lọc Lô =====
+let _selectedLo2 = 'all'; // Lô đang được chọn
+
+function renderChart2(selectedLo) {
+    if (selectedLo !== undefined) _selectedLo2 = selectedLo;
+    let src = ((DATA.s5 && DATA.s5.length) ? DATA.s5 : DATA.s2) || [];
     if (!src.length) return;
+
+    // Lấy danh sách Lô duy nhất để hiển thị nút lọc
+    const allLos = [...new Set(src.map(r => r.lo).filter(Boolean))].sort((a, b) => +a - +b);
+
+    // Cập nhật nút lọc Lô
+    const tabsEl = elId('loTabs2');
+    if (tabsEl && allLos.length > 0) {
+        tabsEl.innerHTML = `<button class="tab ${_selectedLo2 === 'all' ? 'active' : ''}" onclick="renderChart2('all')">Tất cả</button>`
+            + allLos.map(lo => `<button class="tab ${_selectedLo2 === String(lo) ? 'active' : ''}" onclick="renderChart2('${lo}')">Lô ${lo}</button>`).join('');
+    }
+
+    // Lọc dữ liệu theo Lô
+    if (_selectedLo2 !== 'all') {
+        src = src.filter(r => String(r.lo) === String(_selectedLo2));
+    }
 
     const byDoi = {};
     src.forEach(r => {
         const d = r.doi || 'N/A';
         if (!byDoi[d]) byDoi[d] = { nhap: 0, xuat: 0 };
-        byDoi[d].nhap += r.tongNhapTP;
-        byDoi[d].xuat += r.tongXuatTP;
+        byDoi[d].nhap += (r.tongNhapTP || 0);
+        byDoi[d].xuat += (r.tongXuatTP || 0);
     });
     const sorted = Object.entries(byDoi)
         .filter(([, v]) => v.nhap + v.xuat > 0)
@@ -833,10 +869,10 @@ function renderChart2() {
         data: {
             labels: sorted.map(([k]) => k), datasets: [
                 { label: 'Nhập TP (Kg)', data: sorted.map(([, v]) => v.nhap), backgroundColor: 'rgba(16,185,129,0.75)', borderColor: '#10b981', borderWidth: 1, borderRadius: 5 },
-                { label: 'Xuất TP (Kg)', data: sorted.map(([, v]) => v.xuat), backgroundColor: 'rgba(239,68,68,0.65)', borderColor: '#ef4444', borderWidth: 1, borderRadius: 5 },
+                { label: 'Xuất làm (Kg)', data: sorted.map(([, v]) => v.xuat), backgroundColor: 'rgba(239,68,68,0.65)', borderColor: '#ef4444', borderWidth: 1, borderRadius: 5 },
             ]
         },
-        options: { ...cOpts(), plugins: { ...cOpts().plugins, tooltip: { ...cOpts().plugins.tooltip, callbacks: { label: c => `${c.dataset.label}: ${fmt(c.raw)} Kg` } } }, scales: dScales() }
+        options: { ...cOpts(), plugins: { ...cOpts().plugins, tooltip: { ...cOpts().plugins.tooltip, callbacks: { label: c => `${c.dataset.label}: ${fmtKg(c.raw)}` } } }, scales: dScales() }
     });
 }
 
