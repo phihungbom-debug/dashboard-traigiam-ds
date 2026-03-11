@@ -123,7 +123,6 @@ function setGlobalLo(lo) {
     renderChart2();
     renderChart3();
     renderChart4();
-    renderChart5();
     renderChart6();
     renderTable();
 }
@@ -776,7 +775,6 @@ function renderAll() {
     renderChart2();
     renderChart3();
     renderChart4();
-    renderChart5();
     renderChart6();
     renderChart7();
     renderTable();
@@ -986,47 +984,7 @@ function renderChart4() {
     });
 }
 
-// ===== Chart 5: Cân đối SX vs Xuất Bán theo ngày (— lọc GLOBAL_LO) =====
-function renderChart5() {
-    const s5Raw = (DATA.s5 && DATA.s5.length) ? DATA.s5 : (DATA.s2 || []);
-    const sx = filterByLo(s5Raw);
-    const xb = filterByLo(DATA.s3 || []);
 
-    const bySX = {}, byXB = {};
-    sx.forEach(r => bySX[r.ngay] = (bySX[r.ngay] || 0) + r.tongNhapTP);
-    xb.forEach(r => byXB[r.ngay] = (byXB[r.ngay] || 0) + r.tongKL);
-
-    // Sắp xếp ngày chuẩn theo thời gian
-    let dates = [...new Set([...Object.keys(bySX), ...Object.keys(byXB)])]
-                .sort((a, b) => parseDate(a) - parseDate(b));
-    
-    if (t5Days !== 'all') dates = dates.slice(-parseInt(t5Days));
-
-    if (!dates.length) {
-        destroyChart('c5');
-        return;
-    }
-    const ctx = elId('chart5').getContext('2d');
-    const gSX = ctx.createLinearGradient(0, 0, 0, 300);
-    gSX.addColorStop(0, 'rgba(16,185,129,0.5)'); gSX.addColorStop(1, 'rgba(16,185,129,0.02)');
-    const gXB = ctx.createLinearGradient(0, 0, 0, 300);
-    gXB.addColorStop(0, 'rgba(236,72,153,0.5)'); gXB.addColorStop(1, 'rgba(236,72,153,0.02)');
-
-    CHARTS.c5 = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: dates, datasets: [
-                { label: 'Nhập Thành Phẩm (SX)', data: dates.map(d => bySX[d] || 0), borderColor: '#10b981', backgroundColor: gSX, fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointHoverRadius: 7, pointBackgroundColor: '#fff', pointBorderColor: '#10b981' },
-                { label: 'Xuất Bán', data: dates.map(d => byXB[d] || 0), borderColor: '#ec4899', backgroundColor: gXB, fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointHoverRadius: 7, pointBackgroundColor: '#fff', pointBorderColor: '#ec4899' },
-            ]
-        },
-        options: { ...cOpts(), plugins: { ...cOpts().plugins, tooltip: { ...cOpts().plugins.tooltip, callbacks: { label: c => `${c.dataset.label}: ${fmtKg(c.raw)}` } } }, scales: dScales() }
-    });
-}
-function switchTab5(btn, days) {
-    document.querySelectorAll('#card5 .tab').forEach(t => t.classList.remove('active'));
-    btn.classList.add('active'); t5Days = days; renderChart5();
-}
 
 // ===== Chart 6: Xếp hạng hiệu suất Đội (horizontal bar — lọc GLOBAL_LO) =====
 function renderChart6() {
