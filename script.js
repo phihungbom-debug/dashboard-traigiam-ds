@@ -938,17 +938,16 @@ function switchTab3(btn, days) {
     btn.classList.add('active'); t3Days = days; renderChart3();
 }
 
-// ===== Chart 4: Cơ Cấu Tồn Kho TP (Donut) =====
-// Sheet 4 là dữ liệu tổng hợp không có cột Lô
-// Khi chọn Lô cụ thể: chỉ giữ lại những sản phẩm mà Lô đó có Nhập TP > 0 (dựa vào Sheet 5)
+// ===== Chart 4: Cơ Cấu Tồn Kho TP (Donut) — chỉ hiển thị khi "Tất cả" Lô =====
 function renderChart4() {
-    let d = DATA.s4 || [];
+    // Sheet 4 là dữ liệu tổng hợp không có cột Lô
+    // Khi đang lọc Lô cụ thể: xóa trắng, không hiển số liệu sai
+    if (GLOBAL_LO !== 'all') {
+        destroyChart('c4');
+        return;
+    }
 
-    // Khi lọc Lô cụ thỉ: lấy danh sách tên sản phẩm có giá trị trong Lô đó từ Sheet 5
-    // Sheet 5 chỉ có tổng Nhập TP/Đội không có chi tiết loại sản phẩm
-    // Nếu không tìm thấy cách lọc đúng → vẫn hiển thị toàn bộ nhưng thêm cảnh báo
-    const isFiltered = GLOBAL_LO !== 'all';
-    
+    const d = DATA.s4 || [];
     const hasTon = d.filter(r => r.ton > 0);
     if (!hasTon.length) { destroyChart('c4'); return; }
 
@@ -967,10 +966,7 @@ function renderChart4() {
                 legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 8, font: { size: 10, family: "'Inter',sans-serif" }, usePointStyle: true, pointStyleWidth: 7 } },
                 tooltip: {
                     backgroundColor: 'rgba(8,14,26,0.95)', titleColor: '#f1f5f9', bodyColor: '#94a3b8', padding: 12, cornerRadius: 8,
-                    callbacks: {
-                        title: items => isFiltered ? `[Tổng hợp - không phân Lô] ${items[0].label}` : items[0].label,
-                        label: c => { const tot = vals.reduce((a, b) => a + b, 0); return ` ${fmtKg(c.raw)} (${tot > 0 ? ((c.raw / tot) * 100).toFixed(1) : 0}%)`; }
-                    }
+                    callbacks: { label: c => { const tot = vals.reduce((a, b) => a + b, 0); return ` ${fmtKg(c.raw)} (${tot > 0 ? ((c.raw / tot) * 100).toFixed(1) : 0}%)`; } }
                 }
             }
         }
@@ -1062,41 +1058,31 @@ function renderChart6() {
 function renderTable() {
     const d = DATA.s4 || [];
     const tbody = elId('tableBody');
+
+    // Khi đang lọc Lô cụ thể: Sheet 4 không có dữ liệu theo Lô → hiển trắng, không hiển só liệu sai
+    if (GLOBAL_LO !== 'all') {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2.5rem">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:0.75rem">
+                <i class="fa-solid fa-layer-group" style="font-size:2rem;color:#475569"></i>
+                <span style="color:#64748b;font-size:0.85rem">Bảng Tồn Kho là dữ liệu tổng hợp, không phân theo Lô</span>
+                <span style="color:#94a3b8;font-size:0.78rem">Chọn <strong style="color:#c4b5fd">Tất cả</strong> để xem bảng tồn kho</span>
+            </div>
+        </td></tr>`;
+        return;
+    }
+
     if (!d.length) {
         tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted)">Chưa có dữ liệu tồn kho</td></tr>';
         return;
     }
 
-    // Kự hiệu Lô đang chọn
-    const isFiltered = GLOBAL_LO !== 'all';
-    const loBadge = isFiltered
-        ? `<span style="background:rgba(139,92,246,0.2);color:#c4b5fd;padding:2px 8px;border-radius:99px;font-size:0.78rem;font-weight:600">Lô ${GLOBAL_LO}</span>`
-        : '<span style="color:#94a3b8;font-size:0.78rem">Tất cả</span>';
+    // cột Lô: "Tất cả" khi không lọc
+    const loBadge = '<span style="color:#94a3b8;font-size:0.78rem">Tất cả</span>';
 
-    // Nếu đang lọc Lô: lấy danh sách Đội hoạt động trong Lô này từ Sheet 5
-    // Kểm tra xem Lô này có dữ liệu không
-    const s5InLo = filterByLo(DATA.s5 || []);
-    const loHasData = s5InLo.length > 0;
-
-    // Nếu chọn Lô cụ thể nhưng Sheet5 không có dữ liệu: báo rõ
-    if (isFiltered && !loHasData) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2rem">
-            <i class="fa-solid fa-triangle-exclamation" style="color:#fcd34d;margin-right:0.5rem"></i>
-            <span style="color:#fcd34d">Lô ${GLOBAL_LO} không có dữ liệu sản xuất</span>
-        </td></tr>`;
-        return;
-    }
-
-    // Hiển thị dữ liệu từ Sheet 4 (tổng hợp)
     const sorted = [...d];
     const totalTon = sorted.reduce((s, r) => s + (r.ton > 0 ? r.ton : 0), 0);
 
-    const note = isFiltered
-        ? `<tr><td colspan="8" style="text-align:center;padding:0.5rem 1rem;background:rgba(245,158,11,0.07);border-bottom:1px solid rgba(245,158,11,0.15)">
-            <span style="color:#fcd34d;font-size:0.75rem">⚠️ Số liệu Tồn Kho là dữ liệu tổng hợp tất cả Lô từ Sheet Tồn Kho Thành Phẩm</span>
-          </td></tr>` : '';
-
-    tbody.innerHTML = note + sorted.map((r, i) => {
+    tbody.innerHTML = sorted.map((r, i) => {
         const pct = (totalTon > 0 && r.ton > 0) ? ((r.ton / totalTon) * 100).toFixed(1) : 0;
         const badge = r.ton > 200
             ? '<span class="badge-status badge-ok"><i class="fa-solid fa-check"></i> Đủ hàng</span>'
