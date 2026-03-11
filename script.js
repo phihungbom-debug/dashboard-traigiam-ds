@@ -690,17 +690,9 @@ function parseTonKho(rows) {
 
     const result = [];
     let tonRaw = 0;
-    // Tìm cột "Tồn Nguyên Liệu Hiện Tại" theo tên header (linh hoạt, không hard-code index)
-    const iRaw = hn.findIndex(c => c.includes('nguyen') || c.includes('nguyen lieu'));
-    if (iRaw >= 0) {
-        // Đọc giá trị từ dòng đầu tiên có dữ liệu ở cột này
-        for (let i = 1; i < rows.length; i++) {
-            const v = pn(rows[i][iRaw]);
-            if (v > 0) { tonRaw = v; break; }
-        }
-    } else {
-        // Fallback: cột E (index 4) dòng 2
-        if (rows.length > 1) tonRaw = pn(rows[1][4]);
+    // Tồn Nguyên Liệu Hiện Tại nằm ở ô F2 (cột F = index 5, dòng 2 = rows[1])
+    if (rows.length > 1) {
+        tonRaw = pn(rows[1][5]);
     }
 
     for (let i = 1; i < rows.length; i++) {
