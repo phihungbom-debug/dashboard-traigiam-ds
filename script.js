@@ -989,8 +989,8 @@ function renderTable() {
         tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Chưa có dữ liệu tồn kho</td></tr>';
         return;
     }
-    // Sắp xếp theo Tồn kho thực tế
-    const sorted = [...d].sort((a, b) => b.ton - a.ton);
+    // CHỈ hiển thị đúng nguyên bản thứ tự từ sheet Tồn Kho (A1:D)
+    const sorted = [...d]; // Giữ nguyên thứ tự dòng
     // Tính tổng tồn cho các mặt hàng > 0 để tính tỷ lệ %
     const totalTon = sorted.reduce((s, r) => s + (r.ton > 0 ? r.ton : 0), 0);
 
