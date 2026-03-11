@@ -105,6 +105,41 @@ const DEFAULT_URLS = {
 let CHARTS = {};
 let DATA = { s1: null, s2: null, s3: null, s4: null, s5: null, tonRawMaterial: 0 };
 let t3Days = '7', t5Days = '7';
+let GLOBAL_LO = 'all'; // Bộ lọc Lô toàn cục
+
+// Lọc dữ liệu theo Lô toàn cục
+function filterByLo(arr, loField = 'lo') {
+    if (GLOBAL_LO === 'all') return arr;
+    return arr.filter(r => String(r[loField]) === String(GLOBAL_LO));
+}
+
+// Cập nhật bộ lọc Lô: re-render tất cả
+function setGlobalLo(lo) {
+    GLOBAL_LO = String(lo);
+    document.querySelectorAll('.lo-filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.lo === GLOBAL_LO);
+    });
+    renderKPIs();
+    renderChart2();
+    renderChart3();
+    renderChart4();
+    renderChart5();
+    renderChart6();
+    renderTable();
+}
+
+// Xây dựng thanh lọc Lô từ dữ liệu Sheet 5
+function populateLoFilter() {
+    const s5 = DATA.s5 || [];
+    const allLos = [...new Set(s5.map(r => r.lo).filter(l => l && l !== 'N/A'))].sort((a, b) => +a - +b);
+    const container = elId('globalLoFilter');
+    if (!container) return;
+    if (!allLos.length) { container.innerHTML = ''; return; }
+    container.innerHTML =
+        `<span class="lo-filter-label"><i class="fa-solid fa-filter"></i> Lọc theo Lô:</span>` +
+        `<button class="tab lo-filter-btn ${GLOBAL_LO==='all'?'active':''}" data-lo="all" onclick="setGlobalLo('all')">Tất cả</button>` +
+        allLos.map(lo => `<button class="tab lo-filter-btn ${GLOBAL_LO===String(lo)?'active':''}" data-lo="${lo}" onclick="setGlobalLo('${lo}')">Lô ${lo}</button>`).join('');
+}
 
 
 // ---------------------------------------------------------------
@@ -578,10 +613,13 @@ function parseXuatBan(rows) {
     const headers = rows[0];
     const hNorm = headers.map(c => norm(c));
 
-    // Tìm cột Số lượng (thường là F - index 5)
+    // Lấy cột Lô (thường là C = index 2)
+    const iLo = hNorm.findIndex(c => c === 'lo' || c.includes('lo san xuat') || c.includes('ma lo'));
+    const loIdx = iLo >= 0 ? iLo : 2;
+
+    // Tìm cột Số lượng (đơn lẻ - kiểu sheet mới)
     const iQty = hNorm.findIndex(c => c === 'so luong' || (c.includes('so luong') && c.includes('kg')));
 
-    // Nếu tìm thấy cột Số lượng đơn lẻ (kiểu sheet mới)
     if (iQty >= 0) {
         const result = [];
         for (let i = 1; i < rows.length; i++) {
@@ -590,8 +628,9 @@ function parseXuatBan(rows) {
             if (!ngay || ngay.startsWith('<!')) continue;
             const tongKL = pn(r[iQty]);
             if (tongKL === 0) continue;
-            const hang = (str(r[1]) + " " + str(r[2])).trim(); // Ghép Hàng miếng + Hàng cây và xóa khoảng trắng dư
-            result.push({ ngay, khachHang: str(r[4]) || 'N/A', tongKL, detail: { [hang]: tongKL } });
+            const hang = (str(r[1]) + " " + str(r[2])).trim();
+            const lo = str(r[loIdx]) || 'N/A';
+            result.push({ ngay, lo, khachHang: str(r[4]) || 'N/A', tongKL, detail: { [hang]: tongKL } });
         }
         return result;
     }
@@ -611,11 +650,12 @@ function parseXuatBan(rows) {
         const r = rows[i];
         const ngay = String(r[0] || '').trim();
         if (!ngay || ngay.startsWith('<!')) continue;
+        const lo = str(r[loIdx]) || 'N/A';
         const detail = {};
         let sumHang = 0;
         colsHang.forEach(c => { const v = pn(r[c.idx]); if (v > 0) { detail[c.label] = v; sumHang += v; } });
         if (sumHang === 0) continue;
-        result.push({ ngay, khachHang: str(r[iKH]), tongKL: sumHang, detail });
+        result.push({ ngay, lo, khachHang: str(r[iKH]), tongKL: sumHang, detail });
     }
     return result;
 }
@@ -718,6 +758,7 @@ function parseNangSuatCacDoi(rows) {
 // RENDER TẤT CẢ
 // ---------------------------------------------------------------
 function renderAll() {
+    populateLoFilter(); // Xây dựng thanh lọc Lô trước tiên
     renderKPIs();
     renderChart1();
     renderChart2();
@@ -732,12 +773,14 @@ function renderAll() {
 // ===== KPI =====
 function renderKPIs() {
     const s1 = DATA.s1 || [];
-    const s2 = DATA.s2 || [];
-    const s3 = DATA.s3 || [];
-    const s4 = DATA.s4 || [];
+    const s5 = filterByLo(DATA.s5 || []);  // Sản xuất lọc theo Lô
+    const s3 = filterByLo(DATA.s3 || []);  // Xuất bán lọc theo Lô
+    const s4 = DATA.s4 || [];              // Tồn kho tổng hợp - không lọc
 
     const tongNhapNL = s1.reduce((a, r) => a + r.nhapKg, 0);
-    const tongNhapTP = s2.reduce((a, r) => a + r.tongNhapTP, 0);
+    // Nhập TP lấy từ Sheet 5 (Năng Suất) — có Lô
+    const tongNhapTP = s5.length ? s5.reduce((a, r) => a + r.tongNhapTP, 0)
+                                  : (DATA.s2 || []).reduce((a, r) => a + r.tongNhapTP, 0);
     const tongXuatBan = s3.reduce((a, r) => a + r.tongKL, 0);
     const tongTon = s4.filter(r => r.ton > 0).reduce((a, r) => a + r.ton, 0);
     const tonNguyenLieu = DATA.tonRawMaterial || 0;
@@ -828,28 +871,13 @@ function renderChart1() {
     });
 }
 
-// ===== Chart 2: Sản lượng từng Đội (grouped bar) — có bộ lọc Lô =====
-let _selectedLo2 = 'all'; // Lô đang được chọn
+// ===== Chart 2: Sản lượng từng Đội (grouped bar) — lọc theo GLOBAL_LO =====
+let _selectedLo2 = 'all';
 
 function renderChart2(selectedLo) {
     if (selectedLo !== undefined) _selectedLo2 = selectedLo;
-    let src = ((DATA.s5 && DATA.s5.length) ? DATA.s5 : DATA.s2) || [];
+    let src = filterByLo((DATA.s5 && DATA.s5.length) ? DATA.s5 : (DATA.s2 || []));
     if (!src.length) return;
-
-    // Lấy danh sách Lô duy nhất để hiển thị nút lọc
-    const allLos = [...new Set(src.map(r => r.lo).filter(Boolean))].sort((a, b) => +a - +b);
-
-    // Cập nhật nút lọc Lô
-    const tabsEl = elId('loTabs2');
-    if (tabsEl && allLos.length > 0) {
-        tabsEl.innerHTML = `<button class="tab ${_selectedLo2 === 'all' ? 'active' : ''}" onclick="renderChart2('all')">Tất cả</button>`
-            + allLos.map(lo => `<button class="tab ${_selectedLo2 === String(lo) ? 'active' : ''}" onclick="renderChart2('${lo}')">Lô ${lo}</button>`).join('');
-    }
-
-    // Lọc dữ liệu theo Lô
-    if (_selectedLo2 !== 'all') {
-        src = src.filter(r => String(r.lo) === String(_selectedLo2));
-    }
 
     const byDoi = {};
     src.forEach(r => {
@@ -876,9 +904,9 @@ function renderChart2(selectedLo) {
     });
 }
 
-// ===== Chart 3: Nhật Ký Xuất Bán theo ngày =====
+// ===== Chart 3: Nhật Ký Xuất Bán theo ngày (— lọc GLOBAL_LO) =====
 function renderChart3() {
-    const d = DATA.s3 || [];
+    const d = filterByLo(DATA.s3 || []);
     if (!d.length) return;
     const byDate = {};
     d.forEach(r => byDate[r.ngay] = (byDate[r.ngay] || 0) + r.tongKL);
@@ -906,13 +934,13 @@ function switchTab3(btn, days) {
     btn.classList.add('active'); t3Days = days; renderChart3();
 }
 
-// ===== Chart 4: Tồn Kho TP (Donut — chỉ hàng có tồn > 0) =====
+// ===== Chart 4: Tồn Kho TP (Donut — chỉ hàng có tồn > 0, không lọc Lô vì Sheet4 là tổng hợp) =====
 function renderChart4() {
+    // Sheet 4 là dữ liệu tổng hợp - không có cột Lô nên hiển thị toàn bộ bất kể bộ lọc
     const d = DATA.s4 || [];
-    // CHỈ lấy hàng có tồn > 0 từ sheet Tồn Kho Thành Phẩm
     const hasTon = d.filter(r => r.ton > 0);
     if (!hasTon.length) return;
-    
+
     const sorted = [...hasTon].sort((a, b) => b.ton - a.ton);
     const labels = sorted.map(r => r.ten);
     const vals = sorted.map(r => r.ton);
@@ -934,11 +962,12 @@ function renderChart4() {
     });
 }
 
-// ===== Chart 5: Cân đối SX vs Xuất Bán theo ngày =====
+// ===== Chart 5: Cân đối SX vs Xuất Bán theo ngày (— lọc GLOBAL_LO) =====
 function renderChart5() {
-    // Ưu tiên dùng dữ liệu Nhật ký SX hàng ngày (s2) để so sánh khớp mốc thời gian với Xuất bán (s3)
-    const sx = (DATA.s2 && DATA.s2.length) ? DATA.s2 : (DATA.s5 || []);
-    const xb = DATA.s3 || [];
+    // Lọc theo GLOBAL_LO: s5 có cột lo, s3 có cột lo
+    const s5Raw = (DATA.s5 && DATA.s5.length) ? DATA.s5 : (DATA.s2 || []);
+    const sx = filterByLo(s5Raw);
+    const xb = filterByLo(DATA.s3 || []);
 
     const bySX = {}, byXB = {};
     sx.forEach(r => bySX[r.ngay] = (bySX[r.ngay] || 0) + r.tongNhapTP);
@@ -970,9 +999,9 @@ function switchTab5(btn, days) {
     btn.classList.add('active'); t5Days = days; renderChart5();
 }
 
-// ===== Chart 6: Xếp hạng hiệu suất Đội (horizontal bar) =====
+// ===== Chart 6: Xếp hạng hiệu suất Đội (horizontal bar — lọc GLOBAL_LO) =====
 function renderChart6() {
-    const src = ((DATA.s5 && DATA.s5.length) ? DATA.s5 : DATA.s2) || [];
+    const src = filterByLo((DATA.s5 && DATA.s5.length) ? DATA.s5 : (DATA.s2 || []));
     if (!src.length) return;
 
     const byDoi = {};
@@ -994,21 +1023,18 @@ function renderChart6() {
         data: {
             labels: sorted.map(([k]) => k), datasets: [
                 { label: 'Tổng Nhập TP (Kg)', data: sorted.map(([, v]) => v.nhap), backgroundColor: 'rgba(16,185,129,0.75)', borderColor: '#10b981', borderWidth: 1, borderRadius: 5 },
-                { label: 'Tổng Xuất TP (Kg)', data: sorted.map(([, v]) => v.xuat), backgroundColor: 'rgba(139,92,246,0.75)', borderColor: '#8b5cf6', borderWidth: 1, borderRadius: 5 },
+                { label: 'Tổng Xuất làm (Kg)', data: sorted.map(([, v]) => v.xuat), backgroundColor: 'rgba(139,92,246,0.75)', borderColor: '#8b5cf6', borderWidth: 1, borderRadius: 5 },
             ]
         },
         options: {
             ...cOpts(),
             indexAxis: 'y',
-            // Lưu ý: Chart nằm ngang (indexAxis: 'y') cần axis: 'y' để phản hồi cột chính xác nhất
             interaction: { mode: 'nearest', axis: 'y', intersect: false },
             plugins: {
                 ...cOpts().plugins,
                 tooltip: {
                     ...cOpts().plugins.tooltip,
-                    mode: 'index',
-                    axis: 'y',
-                    animation: false,
+                    mode: 'index', axis: 'y', animation: false,
                     callbacks: { label: c => `${c.dataset.label}: ${fmtKg(c.raw)}` }
                 }
             },
@@ -1017,21 +1043,29 @@ function renderChart6() {
     });
 }
 
-// ===== TABLE: Tồn Kho Thành Phẩm =====
+// ===== TABLE: Tồn Kho Thành Phẩm + cột Lô =====
 function renderTable() {
     const d = DATA.s4 || [];
     const tbody = elId('tableBody');
     if (!d.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Chưa có dữ liệu tồn kho</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted)">Chưa có dữ liệu tồn kho</td></tr>';
         return;
     }
-    // CHỈ hiển thị đúng nguyên bản thứ tự từ sheet Tồn Kho (A1:D)
-    const sorted = [...d]; // Giữ nguyên thứ tự dòng
-    // Tính tổng tồn cho các mặt hàng > 0 để tính tỷ lệ %
+    // Tính tổng sản lượng Nhập TP từng sản phẩm từ Sheet 5 theo Lô được chọn
+    const s5Filtered = filterByLo(DATA.s5 || []);
+    // Gom tổng Nhập TP theo từng loại sản phẩm từ Sheet 5 (chỉ có tổng, không phân theo loại)
+    const totalS5Nhap = s5Filtered.reduce((a, r) => a + (r.tongNhapTP || 0), 0);
+
+    // Hiển thị cột Lô thế hiện ngữ cảnh bộ lọc
+    const loBadge = GLOBAL_LO === 'all'
+        ? '<span style="color:#94a3b8;font-size:0.78rem">Tất cả</span>'
+        : `<span style="background:rgba(139,92,246,0.2);color:#c4b5fd;padding:2px 8px;border-radius:99px;font-size:0.78rem;font-weight:600">Lô ${GLOBAL_LO}</span>`;
+
+    // Giữ nguyên thứ tự từ sheet Tồn Kho (A1:D)
+    const sorted = [...d];
     const totalTon = sorted.reduce((s, r) => s + (r.ton > 0 ? r.ton : 0), 0);
 
     tbody.innerHTML = sorted.map((r, i) => {
-        // Tính tỷ lệ % dựa trên số Tồn kho thay vì Nhập kho
         const pct = (totalTon > 0 && r.ton > 0) ? ((r.ton / totalTon) * 100).toFixed(1) : 0;
         const badge = r.ton > 200
             ? '<span class="badge-status badge-ok"><i class="fa-solid fa-check"></i> Đủ hàng</span>'
@@ -1042,8 +1076,9 @@ function renderTable() {
         return `<tr>
             <td style="color:var(--muted);font-weight:600">${i + 1}</td>
             <td style="font-weight:700">${r.ten}</td>
+            <td style="text-align:center">${loBadge}</td>
+            <td style="color:#fbbf24">${fmtKg(r.xuat)}</td>
             <td style="color:#6ee7b7">${fmtKg(r.nhap)}</td>
-            <td style="color:#fca5a5">${fmtKg(r.xuat)}</td>
             <td style="font-weight:700;${tonColor}">${fmtKg(r.ton)}</td>
             <td><div class="pct-bar"><div class="pct-fill" style="width:${pct}%"></div><span>${pct}%</span></div></td>
             <td>${badge}</td>
