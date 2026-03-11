@@ -115,9 +115,9 @@ function filterByLo(arr, loField = 'lo') {
 
 // Cập nhật bộ lọc Lô: re-render tất cả
 function setGlobalLo(lo) {
-    GLOBAL_LO = String(lo);
+    GLOBAL_LO = String(lo).trim();
     document.querySelectorAll('.lo-filter-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.lo === GLOBAL_LO);
+        btn.classList.toggle('active', String(btn.dataset.lo).trim() === GLOBAL_LO);
     });
     renderKPIs();
     renderChart2();
@@ -126,6 +126,15 @@ function setGlobalLo(lo) {
     renderChart5();
     renderChart6();
     renderTable();
+}
+
+// Hàm hỗ trợ parse ngày từ chuỗi "DD/MM/YYYY" hoặc "DD/MM" để sắp xếp
+function parseDate(str) {
+    if (!str || str === 'N/A') return 0;
+    const p = str.split(/[\/\-]/);
+    if (p.length < 2) return 0;
+    const d = parseInt(p[0]), m = parseInt(p[1]) - 1, y = p[2] ? parseInt(p[2]) : new Date().getFullYear();
+    return new Date(y, m, d).getTime();
 }
 
 // Xây dựng thanh lọc Lô từ dữ liệu Sheet 5
@@ -715,42 +724,45 @@ function parseNangSuatCacDoi(rows) {
     if (!rows || rows.length < 2) return [];
     const h = rows[0].map(c => norm(c));
 
-    // Tìm đúng cột theo tên header thực tế
-    const iLo  = h.findIndex(c => c.includes('lo'));
+    const iLo  = h.findIndex(c => c === 'lo' || c.includes('lo sx'));
     const iDoi = h.findIndex(c => c.includes('doi'));
-    const iXuat = h.findIndex(c => c.includes('xuat'));
-    const iNhap = h.findIndex(c => c.includes('nhap'));
+    
+    // Tìm tất cả các cột có chữ "nhap" hoặc "xuat" để cộng dồn (đề phòng có nhiều loại hàng)
+    const colsXuat = [], colsNhap = [];
+    rows[0].forEach((head, idx) => {
+        const hn = norm(head);
+        if (idx < 3) return; // Bỏ qua Ngày, Lô, Đội
+        if (hn.includes('xuat')) colsXuat.push(idx);
+        else if (hn.includes('nhap')) colsNhap.push(idx);
+    });
 
-    // Fallback index theo thứ tự thực tế: A=0 Tháng, B=1 Lô, C=2 Đội, D=3 Xuất, E=4 Nhập
     const loIdx  = iLo   >= 0 ? iLo   : 1;
     const doiIdx = iDoi  >= 0 ? iDoi  : 2;
-    const xIdx   = iXuat >= 0 ? iXuat : 3;
-    const nIdx   = iNhap >= 0 ? iNhap : 4;
-
-    if (doiIdx < 0) return [];
 
     const result = [];
     for (let i = 1; i < rows.length; i++) {
         const r = rows[i];
-        const month = String(r[0] || '').trim();
-        if (!month || month.startsWith('<!')) continue;
+        const dateStr = String(r[0] || '').trim();
+        if (!dateStr || dateStr.startsWith('<!')) continue;
+        
         const lo  = str(r[loIdx]) || 'N/A';
         const doi = str(r[doiIdx]) || 'N/A';
-        const tN  = pn(r[nIdx]);   // Nhập thành phẩm (E)
-        const tX  = pn(r[xIdx]);   // Xuất làm (D)
+        
+        let tN = 0, tX = 0;
+        colsNhap.forEach(idx => tN += pn(r[idx]));
+        colsXuat.forEach(idx => tX += pn(r[idx]));
+
         if (tN === 0 && tX === 0) continue;
         result.push({
-            ngay: month,
+            ngay: dateStr,
             lo,
             doi,
             tongNhapTP: tN,
             tongXuatTP: tX,
-            tongKL: tN || tX,
-            nhapDetail: { 'Nhập TP': tN },
-            xuatDetail: { 'Xuất làm': tX }
+            tongKL: tN || tX
         });
     }
-    return result.length > 0 ? result : (DATA.s2 || []);
+    return result;
 }
 
 
@@ -907,14 +919,15 @@ function renderChart2(selectedLo) {
 // ===== Chart 3: Nhật Ký Xuất Bán theo ngày (— lọc GLOBAL_LO) =====
 function renderChart3() {
     const d = filterByLo(DATA.s3 || []);
-    // Khi không có dữ liệu sau lọc: phải xóa chart cũ để tránh hiển thị sai
     if (!d.length) {
         destroyChart('c3');
         return;
     }
     const byDate = {};
     d.forEach(r => byDate[r.ngay] = (byDate[r.ngay] || 0) + r.tongKL);
-    let dates = Object.keys(byDate).sort();
+    
+    // Sắp xếp ngày theo thời gian (parseDate)
+    let dates = Object.keys(byDate).sort((a, b) => parseDate(a) - parseDate(b));
     if (t3Days !== 'all') dates = dates.slice(-parseInt(t3Days));
 
     destroyChart('c3');
@@ -975,7 +988,6 @@ function renderChart4() {
 
 // ===== Chart 5: Cân đối SX vs Xuất Bán theo ngày (— lọc GLOBAL_LO) =====
 function renderChart5() {
-    // Lọc theo GLOBAL_LO: s5 có cột lo, s3 có cột lo
     const s5Raw = (DATA.s5 && DATA.s5.length) ? DATA.s5 : (DATA.s2 || []);
     const sx = filterByLo(s5Raw);
     const xb = filterByLo(DATA.s3 || []);
@@ -984,10 +996,16 @@ function renderChart5() {
     sx.forEach(r => bySX[r.ngay] = (bySX[r.ngay] || 0) + r.tongNhapTP);
     xb.forEach(r => byXB[r.ngay] = (byXB[r.ngay] || 0) + r.tongKL);
 
-    let dates = [...new Set([...Object.keys(bySX), ...Object.keys(byXB)])].sort();
+    // Sắp xếp ngày chuẩn theo thời gian
+    let dates = [...new Set([...Object.keys(bySX), ...Object.keys(byXB)])]
+                .sort((a, b) => parseDate(a) - parseDate(b));
+    
     if (t5Days !== 'all') dates = dates.slice(-parseInt(t5Days));
 
-    destroyChart('c5');
+    if (!dates.length) {
+        destroyChart('c5');
+        return;
+    }
     const ctx = elId('chart5').getContext('2d');
     const gSX = ctx.createLinearGradient(0, 0, 0, 300);
     gSX.addColorStop(0, 'rgba(16,185,129,0.5)'); gSX.addColorStop(1, 'rgba(16,185,129,0.02)');
