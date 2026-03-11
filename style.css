@@ -216,7 +216,7 @@ body {
     }
 }
 
-.btn-settings {
+.btn-settings, .btn-remote {
     width: 38px;
     height: 38px;
     background: var(--surface2);
@@ -229,11 +229,17 @@ body {
     align-items: center;
     justify-content: center;
     transition: var(--transition);
+    text-decoration: none;
 }
 
-.btn-settings:hover {
+.btn-settings:hover, .btn-remote:hover {
     border-color: var(--violet);
     color: var(--violet);
+    background: rgba(139, 92, 246, 0.1);
+}
+
+.btn-remote i {
+    color: #3b82f6;
 }
 
 /* ============================================
