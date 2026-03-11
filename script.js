@@ -690,9 +690,9 @@ function parseTonKho(rows) {
 
     const result = [];
     let tonRaw = 0;
-    // Lấy Tồn Nguyên Liệu Hiện Tại từ cột E (index 4)
-    if (rows.length > 1) {
-        tonRaw = pn(rows[1][4]);
+    // Lấy Tồn Nguyên Liệu Hiện Tại từ ô F1 (cột F = index 5, hàng 1 = rows[0])
+    if (rows.length > 0) {
+        tonRaw = pn(rows[0][5]);
     }
 
     for (let i = 1; i < rows.length; i++) {
@@ -907,7 +907,11 @@ function renderChart2(selectedLo) {
 // ===== Chart 3: Nhật Ký Xuất Bán theo ngày (— lọc GLOBAL_LO) =====
 function renderChart3() {
     const d = filterByLo(DATA.s3 || []);
-    if (!d.length) return;
+    // Khi không có dữ liệu sau lọc: phải xóa chart cũ để tránh hiển thị sai
+    if (!d.length) {
+        destroyChart('c3');
+        return;
+    }
     const byDate = {};
     d.forEach(r => byDate[r.ngay] = (byDate[r.ngay] || 0) + r.tongKL);
     let dates = Object.keys(byDate).sort();
@@ -934,12 +938,19 @@ function switchTab3(btn, days) {
     btn.classList.add('active'); t3Days = days; renderChart3();
 }
 
-// ===== Chart 4: Tồn Kho TP (Donut — chỉ hàng có tồn > 0, không lọc Lô vì Sheet4 là tổng hợp) =====
+// ===== Chart 4: Cơ Cấu Tồn Kho TP (Donut) =====
+// Sheet 4 là dữ liệu tổng hợp không có cột Lô
+// Khi chọn Lô cụ thể: chỉ giữ lại những sản phẩm mà Lô đó có Nhập TP > 0 (dựa vào Sheet 5)
 function renderChart4() {
-    // Sheet 4 là dữ liệu tổng hợp - không có cột Lô nên hiển thị toàn bộ bất kể bộ lọc
-    const d = DATA.s4 || [];
+    let d = DATA.s4 || [];
+
+    // Khi lọc Lô cụ thỉ: lấy danh sách tên sản phẩm có giá trị trong Lô đó từ Sheet 5
+    // Sheet 5 chỉ có tổng Nhập TP/Đội không có chi tiết loại sản phẩm
+    // Nếu không tìm thấy cách lọc đúng → vẫn hiển thị toàn bộ nhưng thêm cảnh báo
+    const isFiltered = GLOBAL_LO !== 'all';
+    
     const hasTon = d.filter(r => r.ton > 0);
-    if (!hasTon.length) return;
+    if (!hasTon.length) { destroyChart('c4'); return; }
 
     const sorted = [...hasTon].sort((a, b) => b.ton - a.ton);
     const labels = sorted.map(r => r.ten);
@@ -951,11 +962,15 @@ function renderChart4() {
         type: 'doughnut',
         data: { labels, datasets: [{ data: vals, backgroundColor: pal.slice(0, labels.length).map(c => c + 'cc'), borderColor: pal.slice(0, labels.length), borderWidth: 2, hoverOffset: 8 }] },
         options: {
-            responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: {
+            responsive: true, maintainAspectRatio: false, cutout: '68%',
+            plugins: {
                 legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 8, font: { size: 10, family: "'Inter',sans-serif" }, usePointStyle: true, pointStyleWidth: 7 } },
                 tooltip: {
                     backgroundColor: 'rgba(8,14,26,0.95)', titleColor: '#f1f5f9', bodyColor: '#94a3b8', padding: 12, cornerRadius: 8,
-                    callbacks: { label: c => { const tot = vals.reduce((a, b) => a + b, 0); return ` ${fmtKg(c.raw)} (${tot > 0 ? ((c.raw / tot) * 100).toFixed(1) : 0}%)`; } }
+                    callbacks: {
+                        title: items => isFiltered ? `[Tổng hợp - không phân Lô] ${items[0].label}` : items[0].label,
+                        label: c => { const tot = vals.reduce((a, b) => a + b, 0); return ` ${fmtKg(c.raw)} (${tot > 0 ? ((c.raw / tot) * 100).toFixed(1) : 0}%)`; }
+                    }
                 }
             }
         }
@@ -1051,21 +1066,37 @@ function renderTable() {
         tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted)">Chưa có dữ liệu tồn kho</td></tr>';
         return;
     }
-    // Tính tổng sản lượng Nhập TP từng sản phẩm từ Sheet 5 theo Lô được chọn
-    const s5Filtered = filterByLo(DATA.s5 || []);
-    // Gom tổng Nhập TP theo từng loại sản phẩm từ Sheet 5 (chỉ có tổng, không phân theo loại)
-    const totalS5Nhap = s5Filtered.reduce((a, r) => a + (r.tongNhapTP || 0), 0);
 
-    // Hiển thị cột Lô thế hiện ngữ cảnh bộ lọc
-    const loBadge = GLOBAL_LO === 'all'
-        ? '<span style="color:#94a3b8;font-size:0.78rem">Tất cả</span>'
-        : `<span style="background:rgba(139,92,246,0.2);color:#c4b5fd;padding:2px 8px;border-radius:99px;font-size:0.78rem;font-weight:600">Lô ${GLOBAL_LO}</span>`;
+    // Kự hiệu Lô đang chọn
+    const isFiltered = GLOBAL_LO !== 'all';
+    const loBadge = isFiltered
+        ? `<span style="background:rgba(139,92,246,0.2);color:#c4b5fd;padding:2px 8px;border-radius:99px;font-size:0.78rem;font-weight:600">Lô ${GLOBAL_LO}</span>`
+        : '<span style="color:#94a3b8;font-size:0.78rem">Tất cả</span>';
 
-    // Giữ nguyên thứ tự từ sheet Tồn Kho (A1:D)
+    // Nếu đang lọc Lô: lấy danh sách Đội hoạt động trong Lô này từ Sheet 5
+    // Kểm tra xem Lô này có dữ liệu không
+    const s5InLo = filterByLo(DATA.s5 || []);
+    const loHasData = s5InLo.length > 0;
+
+    // Nếu chọn Lô cụ thể nhưng Sheet5 không có dữ liệu: báo rõ
+    if (isFiltered && !loHasData) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2rem">
+            <i class="fa-solid fa-triangle-exclamation" style="color:#fcd34d;margin-right:0.5rem"></i>
+            <span style="color:#fcd34d">Lô ${GLOBAL_LO} không có dữ liệu sản xuất</span>
+        </td></tr>`;
+        return;
+    }
+
+    // Hiển thị dữ liệu từ Sheet 4 (tổng hợp)
     const sorted = [...d];
     const totalTon = sorted.reduce((s, r) => s + (r.ton > 0 ? r.ton : 0), 0);
 
-    tbody.innerHTML = sorted.map((r, i) => {
+    const note = isFiltered
+        ? `<tr><td colspan="8" style="text-align:center;padding:0.5rem 1rem;background:rgba(245,158,11,0.07);border-bottom:1px solid rgba(245,158,11,0.15)">
+            <span style="color:#fcd34d;font-size:0.75rem">⚠️ Số liệu Tồn Kho là dữ liệu tổng hợp tất cả Lô từ Sheet Tồn Kho Thành Phẩm</span>
+          </td></tr>` : '';
+
+    tbody.innerHTML = note + sorted.map((r, i) => {
         const pct = (totalTon > 0 && r.ton > 0) ? ((r.ton / totalTon) * 100).toFixed(1) : 0;
         const badge = r.ton > 200
             ? '<span class="badge-status badge-ok"><i class="fa-solid fa-check"></i> Đủ hàng</span>'
