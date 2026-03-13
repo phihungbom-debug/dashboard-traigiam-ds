@@ -892,6 +892,7 @@ function renderChart2(selectedLo) {
     const byDoi = {};
     src.forEach(r => {
         const d = r.doi || 'N/A';
+        if (d.includes('00')) return; // Ẩn đội 00
         if (!byDoi[d]) byDoi[d] = { nhap: 0, xuat: 0 };
         byDoi[d].nhap += (r.tongNhapTP || 0);
         byDoi[d].xuat += (r.tongXuatTP || 0);
@@ -994,6 +995,7 @@ function renderChart6() {
     const byDoi = {};
     src.forEach(r => {
         const d = r.doi || 'N/A';
+        if (d.includes('00')) return; // Ẩn đội 00
         if (!byDoi[d]) byDoi[d] = { nhap: 0, xuat: 0 };
         byDoi[d].nhap += r.tongNhapTP;
         byDoi[d].xuat += r.tongXuatTP;
